@@ -1,4 +1,10 @@
 #!/bin/bash
+# Clone (or refresh) the Polyphase Engine repository the agent will work on.
+#
+# On a coding-agent container, the clone needs to be writable since the
+# agent will commit + push feature branches. GITHUB_TOKEN, if set, has
+# already been wired into git's credential helper by entrypoint.sh via
+# `gh auth setup-git`, so HTTPS clone/push to github.com just works.
 set -e
 
 if [ -z "$POLYPHASE_REPO" ]; then
@@ -13,5 +19,11 @@ if [ ! -d "/data/openclaw/.openclaw/workspace/Polyphase/.git" ]; then
 else
   echo "Polyphase Engine repo already exists, pulling latest..."
   cd "/data/openclaw/.openclaw/workspace/Polyphase"
-  git pull && git submodule update --init --recursive
+  git pull --ff-only || echo "  (pull skipped; agent may be on a feature branch)"
+  git submodule update --init --recursive
 fi
+
+# Ensure the base branch we'll PR against is fetched.
+cd "/data/openclaw/.openclaw/workspace/Polyphase"
+base_branch="${GITHUB_BASE_BRANCH:-main}"
+git fetch origin "$base_branch" || true

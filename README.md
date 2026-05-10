@@ -1,42 +1,53 @@
-# Polyphase Engine Dev Agent — OpenClaw Docker Deployment
+# Polyphase Engine Coding Agent — OpenClaw Docker Deployment
 
-A self-contained Docker deployment of an [OpenClaw](https://docs.openclaw.ai) agent specialised for [Polyphase Engine](https://github.com/Polyphase-Labs/Polyphase-Engine) development. On startup it clones the Polyphase Engine repository into the container workspace, loads the four `polyphase*` skills, and exposes the OpenClaw Gateway + Control UI over HTTP.
+An autonomous coding agent for the [Polyphase Engine](https://github.com/Polyphase-Labs/Polyphase-Engine), built on [OpenClaw](https://docs.openclaw.ai).
 
-## What It Does
+Give it a feature request in English. It plans the change, creates a uniquely-named branch under `development/features/<scope>/<slug>-<6hex>`, writes the code, compiles the Linux Editor (and optionally every non-Windows target: Linux Game, Wii, GameCube, 3DS), and finally opens a pull request against the upstream repo on GitHub.
 
-The agent ships with four skills covering the full surface of Polyphase Engine development:
+The container ships with the full engine build environment baked in — `devkitPPC`, `devkitARM`, `libogc2`, `wii-dev`, `3ds-dev`, `gamecube-tools-git`, the Vulkan SDK, `glslc`, GCC 12, Node 22, and the GitHub CLI — so it can verify changes on every shipped platform except Windows without leaving the container.
 
-| Skill | Purpose |
-|-------|---------|
-| **polyphase** | Senior engine-developer skill — RTTI/factory patterns, serialization, naming conventions, every subsystem (rendering, scripting, node graphs, editor, asset pipeline, plugins). Reads `.llm/Spec.md` and subsystem docs as its map. |
-| **polyphase-addon** | Build and ship full-fledged native C++ addons under `<Project>/Packages/<reverse-dns-id>/` — hot-reloaded by the editor, statically linked into shipped builds. Covers `package.json`, lifecycle, editor-UI hooks, per-platform libraries. |
-| **polyphase-controller** | Drive the running editor over its REST controller server — create scenes, spawn nodes, set transforms and properties, attach Lua scripts, fill in script-exposed fields, start/stop play-in-editor. |
-| **polyphase-widget** | Generate new UI widgets following the established Widget + Lua-binding pattern. |
+## What it does
 
-The skills read the `.llm/` documentation files and source headers directly from the cloned repo inside the container, so answers are grounded in the actual codebase rather than guesses.
+1. **Plan** — reads `.llm/Spec.md` and the relevant subsystem docs in the engine, identifies which files to touch, writes a plan you can review.
+2. **Branch** — creates a unique branch named `development/features/<scope>/<slug>-<6hex>` based on the configured base branch (`main` by default).
+3. **Code** — writes the implementation following Polyphase's RTTI/factory/serialization conventions. Pulls in `polyphase`, `polyphase-addon`, `polyphase-controller`, and `polyphase-widget` skills as needed.
+4. **Compile** — minimum bar: Linux Editor builds cleanly (`make -C Standalone -f Makefile_Linux_Editor`). Optionally builds Linux Game, Wii, GameCube, and 3DS.
+5. **(Optional) Headless smoke test** — launches the editor under `xvfb-run` with `-headless` and pokes its REST controller server.
+6. **PR** — pushes the branch and opens a pull request against `$GITHUB_BASE_BRANCH` with an auto-generated body summarising the change and verification results.
 
-### Use Cases
+You stay in the loop at every checkpoint via the OpenClaw Control UI — it asks for plan sign-off before coding and won't push until you say so (unless you explicitly tell it to run autonomously).
 
-- **Code generation** — Scaffold new Node types, Asset types, GraphNodes, Lua bindings, native addons, editor panels, or widgets following Polyphase's exact conventions (RTTI macros, factory registration, serialization patterns).
-- **Scene authoring at runtime** — "Spawn a cube at origin, attach the player script, and start play-in-editor" — handled via the `polyphase-controller` skill talking to the editor's REST server.
-- **Architecture Q&A** — Query subsystem design, class hierarchies, or how specific engine features are implemented.
-- **Debugging assistance** — Describe a bug; the agent will trace call chains, read relevant source files, and suggest fixes.
-- **Code review** — Paste code and it will check for missing `FORCE_LINK_CALL` registration, incorrect naming, missing `#if EDITOR` guards, asset version gating, and other common pitfalls.
-- **Onboarding** — New developers can ask the agent to explain any part of the engine, from the rendering pipeline to the plugin API.
+## What's inside
+
+| Component | Purpose |
+|-----------|---------|
+| `polyphaselabs/polyphase-bare:latest` base image | All engine build toolchains (Linux + console cross-compilers). |
+| Node 22 + OpenClaw | Agent runtime. |
+| GitHub CLI (`gh`) | PR creation, git credential setup. |
+| `xvfb` | Headless editor runs that touch GL/Vulkan init. |
+| `git-lfs` | LFS-tracked assets in the engine repo. |
+| **5 bundled skills** | `polyphase-feature-agent` (orchestrator) + `polyphase`, `polyphase-addon`, `polyphase-controller`, `polyphase-widget`. |
+| `/workspace/scripts/` | Helper shell scripts: create branch, verify compile, full build matrix, headless run, open PR. |
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- An [OpenAI API key](https://platform.openai.com/api-keys) (the agent uses `gpt-5.1-codex` by default; Anthropic also supported)
+- A GitHub personal access token with write access to the target repo (see [Setting up GitHub auth](#setting-up-github-auth) below)
+- An [OpenAI API key](https://platform.openai.com/api-keys) (default model is `gpt-5.1-codex`; Anthropic also supported via the onboarding wizard)
 
 ## Quick Start
 
-### 1. (Optional) Create a `.env` file
+### 1. Create a `.env` file
 
-The compose file defaults `POLYPHASE_REPO` to `https://github.com/Polyphase-Labs/Polyphase-Engine`, so you can skip this step unless you want to point at a fork or private mirror.
+```ini
+# GitHub PAT with Contents: read+write and Pull requests: read+write on the target repo
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-```bash
-echo "POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine" > .env
+# Optional overrides:
+POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine
+GITHUB_BASE_BRANCH=main
+GIT_AUTHOR_NAME=Polyphase Code Agent
+GIT_AUTHOR_EMAIL=codeagent@polyphase.local
 ```
 
 ### 2. Build and start the container
@@ -45,231 +56,141 @@ echo "POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine" > .env
 docker compose up --build -d
 ```
 
+First build is slow (it pulls `polyphase-bare`, which is several GB of toolchains). Subsequent rebuilds use the Docker layer cache and finish in seconds unless you touched the Dockerfile or skills.
+
 ### 3. Run onboarding (first time only)
 
-The agent needs your OpenAI or Anthropic API key stored in its credential store. Shell into the running container and run the onboard wizard:
-
 ```bash
-docker compose exec polyphase_claw openclaw onboard
+docker compose exec polyphase_codeagent openclaw onboard
 ```
 
-This walks you through:
-- Accepting the terms
-- Selecting your model provider (choose **OpenAI** or **Anthropic**)
-- Entering your **API key**
+The wizard asks for:
+- Acceptance of terms
+- Model provider (OpenAI or Anthropic)
+- API key
 
-The key is saved inside the persistent Docker volume, so you only need to do this once. The container will retain it across restarts.
-
-### 4. Restart the gateway
-
-After onboarding, restart the container so the gateway picks up the new credentials:
+The credential lives in the persistent Docker volume so you only do this once. Restart after onboarding:
 
 ```bash
 docker compose restart
 ```
 
-### 5. Open the Control UI
-
-Navigate to:
+### 4. Open the Control UI
 
 ```
 http://localhost:3348
 ```
 
-You should see the OpenClaw Control UI. Enter the gateway auth token when prompted (see [Authentication](#authentication) below).
+Enter the gateway token when prompted (default: `polyphase`; override with `GATEWAY_TOKEN`).
 
-## Authentication
+### 5. Ask Polly to build a feature
 
-The gateway uses **token-based auth**. When you open the Control UI, you'll be asked for a token.
-
-### Default token
-
-The default token is set in `openclaw/openclaw.json` under `gateway.auth.token`:
-
-```json
-"auth": {
-  "mode": "token",
-  "token": "polyphase"
-}
+```
+Implement an HTTP backend for the Dolphin platform — use libogc sockets with mbedTLS for HTTPS. Verify Linux Editor + Wii.
 ```
 
-Enter `polyphase` (or whatever you've changed it to) in the Control UI token prompt.
+The agent will:
+1. Read the relevant docs (`Engine/Source/Network/`, `.llm/` docs).
+2. Show you a plan.
+3. After your "go ahead", create `development/features/network/dolphin-http-<hash>` and write the code.
+4. Run `verify_compile_linux.sh`, fix any compile errors, then `verify_build_console.sh wii`.
+5. Push the branch and open a PR against `main`. The PR URL is the final message.
 
-### Changing the token
+## Setting up GitHub auth
 
-Edit `openclaw/openclaw.json` and change `gateway.auth.token` to any string you want, then rebuild:
+The agent needs a token that can:
+- **Clone** the repo (if private — public repos don't need a token for clone but do for push)
+- **Push** the feature branch
+- **Open a pull request** via the `gh` CLI
+
+### Fine-grained PAT (recommended)
+
+1. Go to **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+2. **Repository access**: only the target repo (e.g. `Polyphase-Labs/Polyphase-Engine`).
+3. **Permissions** → **Repository permissions**:
+   - **Contents**: Read and write
+   - **Pull requests**: Read and write
+   - **Metadata**: Read-only (auto)
+4. Copy the token, put it in `.env` as `GITHUB_TOKEN=...`, then `docker compose up -d` (or `restart`) so the entrypoint picks it up.
+
+### Classic PAT (legacy)
+
+If your org doesn't allow fine-grained tokens yet, use a classic PAT with the `repo` scope (full repo access). Same `GITHUB_TOKEN=...` placement.
+
+### Verifying auth inside the container
 
 ```bash
-docker compose up --build -d
+docker compose exec polyphase_codeagent gh auth status
 ```
 
-### Device pairing
+Should report `Logged in to github.com as <user>` with `Token scopes` showing the right permissions.
 
-Device pairing is **disabled** in this deployment (`dangerouslyDisableDeviceAuth: true`) for convenience. This means any browser that has the token can connect without an additional approval step.
+## Authentication (Control UI)
 
-If you want to re-enable pairing for tighter security, set `dangerouslyDisableDeviceAuth` to `false` in `openclaw/openclaw.json`. New browsers will then require approval:
+The OpenClaw Gateway uses token-based auth for the Control UI. Default token: `polyphase` (set in `openclaw/openclaw.json` under `gateway.auth.token`; override with the `GATEWAY_TOKEN` env var without rebuilding).
 
-```bash
-docker compose exec polyphase_claw openclaw devices list
-docker compose exec polyphase_claw openclaw devices approve <requestId>
-```
+Device pairing is disabled (`dangerouslyDisableDeviceAuth: true`) for convenience. See `dockerhub.md` for the security hardening checklist if you intend to expose this beyond `localhost`.
 
-### Allowed origins
+## Environment variables
 
-The Control UI enforces CORS via `allowedOrigins`. By default it only allows `http://localhost:3348`. To allow additional origins (e.g., accessing from a remote host), set the `ALLOWED_ORIGINS` environment variable as a comma-separated list:
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_TOKEN` | Yes (for push/PR) | PAT for the target repo. The container can still start without it but won't be able to push or PR. |
+| `POLYPHASE_REPO` | No | Repo URL to clone (default: `https://github.com/Polyphase-Labs/Polyphase-Engine`). |
+| `GITHUB_BASE_BRANCH` | No | Base branch PRs target (default: `main`). |
+| `GIT_AUTHOR_NAME` | No | Author name on commits (default: `Polyphase Code Agent`). |
+| `GIT_AUTHOR_EMAIL` | No | Author email on commits (default: `codeagent@polyphase.local`). |
+| `SYNC_MODE` | No | `"true"` to overwrite config/skills/memory from the image on every boot. Default: only on first run. |
+| `ALLOWED_ORIGINS` | No | Comma-separated CORS origins for the Control UI. |
+| `GATEWAY_TOKEN` | No | Override the Control UI auth token at runtime. |
 
-```yaml
-# docker-compose.yml
-environment:
-  ALLOWED_ORIGINS: "http://localhost:3348,https://myhost.example.com"
-```
+## Helper scripts
 
-Or with plain Docker:
+The agent calls these via shell. You can also call them by hand if you `docker compose exec polyphase_codeagent bash`:
 
-```bash
-docker run -d \
-  -e ALLOWED_ORIGINS="http://localhost:3348,https://myhost.example.com" \
-  ...
-```
+| Script | Purpose |
+|--------|---------|
+| `/workspace/scripts/create_feature_branch.sh <scope> <slug>` | Create unique branch under `development/features/`. |
+| `/workspace/scripts/verify_compile_linux.sh` | Build Linux Editor (shaders + libgit2 + asset stubs + engine + editor + libLua), smoke-check the resulting ELF. Required minimum. |
+| `/workspace/scripts/verify_build_console.sh {wii\|gcn\|3ds\|linux-game}` | Build one extra target via its `Standalone/Makefile_<target>`. |
+| `/workspace/scripts/verify_build_all.sh` | Full matrix: Linux Editor → Linux Game → Wii → GCN → 3DS. |
+| `/workspace/scripts/run_editor_headless.sh <project>` | Run editor under `xvfb-run` with `-headless`, optionally driven via the controller REST server. |
+| `/workspace/scripts/open_pr.sh "<title>" <body-file>` | Commit pending changes, push branch, `gh pr create`. |
 
-The entrypoint patches the config JSON at runtime, so you don't need to rebuild.
-
-### Gateway token via environment
-
-You can override the auth token at runtime without editing `openclaw.json`:
-
-```yaml
-# docker-compose.yml
-environment:
-  GATEWAY_TOKEN: "my-secret-token"
-```
-
-Or with plain Docker:
-
-```bash
-docker run -d \
-  -e GATEWAY_TOKEN="my-secret-token" \
-  ...
-```
-
-### Security notes
-
-- The gateway binds to `0.0.0.0` inside the container (`bind: "lan"`) so Docker can route traffic to it. It is only exposed on port `3348` on your host.
-- Do **not** expose port `3348` to the public internet without changing the token to something strong and re-enabling device auth.
-- The `allowedOrigins` in the config restricts Control UI access to `http://localhost:3348`. Use `ALLOWED_ORIGINS` to add more origins.
-
-## Running Without Docker Compose
-
-If you prefer plain `docker` commands instead of Compose:
-
-### 1. Build the image
-
-```bash
-docker build -t polyphase-claw .
-```
-
-### 2. Create a volume for persistent data
-
-```bash
-docker volume create openclaw_polyphase_state
-```
-
-### 3. Run the container
-
-```bash
-docker run -d \
-  --name polyphase_claw \
-  -e POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine \
-  -e OPENCLAW_HOME=/data/openclaw \
-  -p 3348:3000 \
-  -v openclaw_polyphase_state:/data/openclaw \
-  --tty --interactive \
-  polyphase-claw
-```
-
-### 4. Run onboarding (first time only)
-
-```bash
-docker exec -it polyphase_claw openclaw onboard
-```
-
-Then restart the container:
-
-```bash
-docker restart polyphase_claw
-```
-
-### 5. Open the Control UI
-
-Navigate to `http://localhost:3348` and enter the auth token (default: `polyphase`).
-
-### Useful commands
-
-```bash
-# View logs
-docker logs -f polyphase_claw
-
-# Shell into the container
-docker exec -it polyphase_claw bash
-
-# List skills
-docker exec polyphase_claw openclaw skills list
-
-# Stop and remove
-docker stop polyphase_claw && docker rm polyphase_claw
-
-# Fully reset (remove persistent data)
-docker volume rm openclaw_polyphase_state
-```
-
-## Project Structure
+## Project structure
 
 ```
 .
-├── Dockerfile                  # Node 22 base, installs OpenClaw via npm
-├── docker-compose.yml          # Service definition, port mapping, volume
-├── entrypoint.sh               # Clones Polyphase repo, copies config, starts gateway
+├── Dockerfile                  # polyphase-bare base + Node 22 + gh + xvfb
+├── docker-compose.yml          # Service + env var wiring + persistent volume
+├── entrypoint.sh               # gh auth setup-git + clone + start gateway
 ├── build.sh                    # Clone/pull helper invoked by entrypoint
+├── scripts/                    # Helper shell scripts the agent calls
+│   ├── create_feature_branch.sh
+│   ├── verify_compile_linux.sh
+│   ├── verify_build_console.sh
+│   ├── verify_build_all.sh
+│   ├── run_editor_headless.sh
+│   └── open_pr.sh
 ├── openclaw/
 │   ├── openclaw.json           # OpenClaw gateway + agent configuration
 │   └── workspace/
 │       ├── skills/
-│       │   ├── polyphase/             # General engine-dev skill
-│       │   ├── polyphase-addon/       # Native C++ addon authoring
-│       │   ├── polyphase-controller/  # Editor REST controller scripting
-│       │   └── polyphase-widget/      # UI widget generation
-│       └── memory/             # Agent identity + seeded memory files
+│       │   ├── polyphase-feature-agent/   # Orchestrator (plan→branch→code→build→PR)
+│       │   ├── polyphase/                  # Engine developer playbook
+│       │   ├── polyphase-addon/            # Native C++ addon authoring
+│       │   ├── polyphase-controller/       # Editor REST controller scripting
+│       │   └── polyphase-widget/           # UI widget generation
+│       └── memory/             # Polly identity + seeded memory
+├── .github/workflows/release.yml   # Tag → Docker Hub + GitHub Release
 └── README.md
 ```
 
-## Configuration
+## Sync mode
 
-### Changing the model
+By default, the bundled config/skills/memory are only copied into the persistent volume on **first boot**. Edits made inside the container (onboarding creds, Polly's accumulated session memory, gateway token tweaks) are preserved across `docker compose restart`/`up`.
 
-Edit `openclaw/openclaw.json` and update `agents.defaults.model.primary` and the agent's `model` field in `agents.list`:
-
-```json
-"model": {
-  "primary": "openai/gpt-5.1-codex"
-}
-```
-
-### Changing the port
-
-The gateway listens on port `3000` inside the container, mapped to `3348` on the host. To change the host port, edit `docker-compose.yml`:
-
-```yaml
-ports:
-  - "YOUR_PORT:3000"
-```
-
-Then update `gateway.controlUi.allowedOrigins` in `openclaw/openclaw.json` to match.
-
-### Sync mode
-
-By default, the config, skills, and memory files are only copied into the volume on the **first boot** (tracked by a `flag.json` marker). This means changes you make inside the container (via onboarding, editing config, etc.) are preserved across restarts.
-
-If you want the container to **always overwrite** the volume config/skills/memory with what's baked into the image, set `SYNC_MODE=true`:
+When you're iterating on the skills or `openclaw.json` and want every rebuild to push the latest versions:
 
 ```yaml
 # docker-compose.yml
@@ -277,25 +198,11 @@ environment:
   SYNC_MODE: "true"
 ```
 
-Or with plain Docker:
+This overwrites `skills/` and `memory/` from the image and deep-merges the image's `openclaw.json` into the existing one (image values win, but onboarding-set fields like `auth.profiles` are preserved).
 
-```bash
-docker run -d \
-  -e SYNC_MODE=true \
-  ...
-```
+## Resetting
 
-This is useful during development when you're iterating on `openclaw.json`, skills, or memory files and want every rebuild to push the latest changes into the running volume.
-
-### Persistent data
-
-The Docker volume `openclaw_polyphase_state` persists:
-- The cloned Polyphase Engine repository
-- OpenClaw credentials (from onboarding)
-- Session history and memory
-- Config and skills (after first boot, unless `SYNC_MODE=true`)
-
-To fully reset, remove the volume:
+Persistent state lives in the `openclaw_polyphase_codeagent_state` volume. To wipe it (re-run onboarding from scratch, re-clone the engine):
 
 ```bash
 docker compose down -v
@@ -303,40 +210,37 @@ docker compose down -v
 
 ## Troubleshooting
 
-### "Gateway token missing"
-Enter the auth token in the Control UI prompt. Default: `polyphase`.
+### "GITHUB_TOKEN is not set" warning at startup
+You can still start the container without a token (read-only mode), but the agent can't push or open PRs. Add `GITHUB_TOKEN=...` to `.env` and `docker compose restart`.
 
-### "Pairing required"
-If you re-enabled device auth, approve the device from inside the container (see [Device pairing](#device-pairing)).
+### `gh pr create` fails with "must be on a branch"
+The feature branch wasn't created. Re-run `create_feature_branch.sh <scope> <slug>` first.
 
-### Skill not showing up
-All four `polyphase*` skills should appear in the agent's skill list. Verify with:
+### Build fails on first run after `docker compose up`
+The very first compile in a fresh container will be slow (no build cache). Look at the actual error in `verify_compile_linux.sh` output rather than re-running blindly. If it's an environment problem (`DEVKITPRO` unset, `glslc` not in PATH), file an issue — the `polyphase-bare` base image should have everything pre-wired.
 
-```bash
-docker compose exec polyphase_claw openclaw skills list
-```
-
-If anything is missing, check that the SKILL.md files were copied correctly:
-
-```bash
-docker compose exec polyphase_claw ls /data/openclaw/.openclaw/workspace/skills/
-```
-
-You should see `polyphase/`, `polyphase-addon/`, `polyphase-controller/`, and `polyphase-widget/` — each containing a `SKILL.md`.
-
-### Skills out of date after a Polyphase Engine update
-The skills are baked into the Docker image from the engine repo's `.claude/skills/` at build time. To refresh them, copy the latest skill folders into `openclaw/workspace/skills/` and rebuild:
-
-```bash
-docker compose up --build -d
-```
-
-If you want the rebuild to also push the updated skills into the live volume, set `SYNC_MODE=true` for the next boot.
+### Headless editor exits immediately
+The engine's `-headless` mode requires both the flag **and** a `-project <path>` argument. Without a project, it falls back to interactive mode and exits when no window opens. Pass a valid project path.
 
 ### Onboarding credentials lost
-If you removed the Docker volume, re-run onboarding:
+If you removed the Docker volume:
 
 ```bash
-docker compose exec polyphase_claw openclaw onboard
+docker compose exec polyphase_codeagent openclaw onboard
 docker compose restart
 ```
+
+## Release workflow
+
+A tag matching `v*` pushed to the GitHub mirror of this repo triggers `.github/workflows/release.yml`, which:
+1. Builds a multi-arch (linux/amd64 + linux/arm64) Docker image.
+2. Pushes it to Docker Hub as `polyphaselabs/polyphase-codeagent-claw` (override via the `DOCKERHUB_IMAGE` repo variable).
+3. Creates a GitHub Release with auto-generated notes since the previous tag.
+
+Required repo secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`. See the workflow file header for setup details.
+
+## Links
+
+- [Polyphase Engine](https://github.com/Polyphase-Labs/Polyphase-Engine)
+- [OpenClaw documentation](https://docs.openclaw.ai)
+- [polyphase-bare Docker image](https://hub.docker.com/r/polyphaselabs/polyphase-bare) (build environment base)

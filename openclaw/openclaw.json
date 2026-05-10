@@ -38,6 +38,7 @@
         "id": "main",
         "model": "openai/gpt-5.1-codex",
         "skills": [
+          "polyphase-feature-agent",
           "polyphase",
           "polyphase-addon",
           "polyphase-controller",
@@ -99,6 +100,9 @@
       "watch": true
     },
     "entries": {
+      "polyphase-feature-agent": {
+        "enabled": true
+      },
       "polyphase": {
         "enabled": true
       },

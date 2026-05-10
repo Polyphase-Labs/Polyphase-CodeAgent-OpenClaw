@@ -13,7 +13,7 @@ name: Release
 #
 # Optional repository variable (Settings → Secrets and variables → Actions → Variables):
 #   DOCKERHUB_IMAGE    — Override the image namespace/name.
-#                        Defaults to "polyphaselabs/polyphase-dev-claw".
+#                        Defaults to "polyphaselabs/polyphase-codeagent-claw".
 #                        Set this if you fork the repo or publish under a
 #                        different Docker Hub org.
 
@@ -44,7 +44,7 @@ jobs:
           version="${tag#v}"
           image="${{ vars.DOCKERHUB_IMAGE }}"
           if [ -z "$image" ]; then
-            image="polyphaselabs/polyphase-dev-claw"
+            image="polyphaselabs/polyphase-codeagent-claw"
           fi
           echo "tag=$tag"           >> "$GITHUB_OUTPUT"
           echo "version=$version"   >> "$GITHUB_OUTPUT"

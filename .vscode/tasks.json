@@ -82,14 +82,14 @@
     {
       "label": "Docker: Publish",
       "type": "shell",
-      "command": "docker build -t ${env:POLYPHASE_DOCKER_USER}/polyphase-dev-claw:latest . && docker push ${env:POLYPHASE_DOCKER_USER}/polyphase-dev-claw:latest",
+      "command": "docker build -t ${env:POLYPHASE_DOCKER_USER}/polyphase-codeagent-claw:latest . && docker push ${env:POLYPHASE_DOCKER_USER}/polyphase-codeagent-claw:latest",
       "group": "build",
       "problemMatcher": []
     },
     {
       "label": "WSL Docker: Publish",
       "type": "shell",
-      "command": "wsl docker build -t ${env:POLYPHASE_DOCKER_USER}/polyphase-dev-claw:latest . && wsl docker push ${env:POLYPHASE_DOCKER_USER}/polyphase-dev-claw:latest",
+      "command": "wsl docker build -t ${env:POLYPHASE_DOCKER_USER}/polyphase-codeagent-claw:latest . && wsl docker push ${env:POLYPHASE_DOCKER_USER}/polyphase-codeagent-claw:latest",
       "group": "build",
       "problemMatcher": []
     }

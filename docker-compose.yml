@@ -1,18 +1,35 @@
 services:
-  polyphase_claw:
+  polyphase_codeagent:
     build: .
     environment:
+      # Repo the agent works on. Defaults to the public engine; override for
+      # forks / private mirrors. The clone goes into /data/openclaw/.../Polyphase.
       POLYPHASE_REPO: ${POLYPHASE_REPO:-https://github.com/Polyphase-Labs/Polyphase-Engine}
+
+      # GitHub token used for clone (private repos), push, and PR creation.
+      # A fine-grained PAT scoped to "Contents: read+write" and "Pull requests:
+      # read+write" on the target repo is enough. Classic PATs need `repo` scope.
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+
+      # Base branch the agent PRs against. Defaults to main.
+      GITHUB_BASE_BRANCH: ${GITHUB_BASE_BRANCH:-main}
+
+      # Identity used in git commits. Override to attribute commits to the
+      # human operator or a dedicated bot user.
+      GIT_AUTHOR_NAME:  ${GIT_AUTHOR_NAME:-Polyphase Code Agent}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-codeagent@polyphase.local}
+
       OPENCLAW_HOME: /data/openclaw
       SYNC_MODE: "false"
+
       # ALLOWED_ORIGINS: "http://localhost:3348,https://myhost.example.com"
       # GATEWAY_TOKEN: "my-secret-token"
     ports:
       - "3348:3000"
     volumes:
-      - openclaw_polyphase_state:/data/openclaw
+      - openclaw_polyphase_codeagent_state:/data/openclaw
     tty: true
     stdin_open: true
 
 volumes:
-  openclaw_polyphase_state:
+  openclaw_polyphase_codeagent_state:

@@ -1,6 +1,27 @@
 #!/bin/bash
 set -e
 
+# ----- GitHub auth setup -----
+# Coding agents need to clone, push, and open PRs. Wire git + gh CLI from
+# the GITHUB_TOKEN env var (a fine-grained or classic PAT with repo scope).
+# Without a token we still start (the user may want a read-only session),
+# but the open_pr.sh helper will refuse to push.
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  echo "Configuring git + gh from GITHUB_TOKEN"
+  git config --global user.name  "${GIT_AUTHOR_NAME:-Polyphase Code Agent}"
+  git config --global user.email "${GIT_AUTHOR_EMAIL:-codeagent@polyphase.local}"
+  git config --global init.defaultBranch main
+  git config --global --add safe.directory '*'
+  # gh stores the token and registers itself as git's credential helper for
+  # github.com — handles both HTTPS clone/push and `gh pr create`.
+  echo "$GITHUB_TOKEN" | gh auth login --hostname github.com --git-protocol https --with-token
+  gh auth setup-git
+else
+  echo "WARNING: GITHUB_TOKEN is not set. The agent can still read the repo," \
+       "but clone of private repos, push, and PR creation will fail." >&2
+fi
+
+# Clone (or pull) the target repo into the workspace.
 bash "./build.sh"
 
 cd "$POLYPHASE_DIR"
