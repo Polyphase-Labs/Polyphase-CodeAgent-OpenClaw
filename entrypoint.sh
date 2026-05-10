@@ -6,16 +6,38 @@ set -e
 # the GITHUB_TOKEN env var (a fine-grained or classic PAT with repo scope).
 # Without a token we still start (the user may want a read-only session),
 # but the open_pr.sh helper will refuse to push.
+#
+# Subtle gh behaviour: when GITHUB_TOKEN is set in the environment, `gh auth
+# login --with-token` refuses to write the credential to its persistent
+# store and prints:
+#   "The value of the GITHUB_TOKEN environment variable is being used for
+#    authentication. To have GitHub CLI store credentials instead, first
+#    clear the value from the environment."
+# Stash the token into a local variable, unset it for the duration of the
+# `gh auth login` + `gh auth setup-git` calls so gh writes its config
+# cleanly, then re-export. After this block both layers see the token:
+#   - gh's persistent config (~/.config/gh/hosts.yml) — used by `gh pr create`
+#   - GITHUB_TOKEN env var — used by anything that reads it directly
+#   - git's credential helper (= `gh auth git-credential`) — used by push
 if [ -n "${GITHUB_TOKEN:-}" ]; then
   echo "Configuring git + gh from GITHUB_TOKEN"
   git config --global user.name  "${GIT_AUTHOR_NAME:-Polyphase Code Agent}"
   git config --global user.email "${GIT_AUTHOR_EMAIL:-codeagent@polyphase.local}"
   git config --global init.defaultBranch main
   git config --global --add safe.directory '*'
-  # gh stores the token and registers itself as git's credential helper for
-  # github.com — handles both HTTPS clone/push and `gh pr create`.
-  echo "$GITHUB_TOKEN" | gh auth login --hostname github.com --git-protocol https --with-token
+
+  _gh_token="$GITHUB_TOKEN"
+  unset GITHUB_TOKEN GH_TOKEN
+  echo "$_gh_token" | gh auth login --hostname github.com --git-protocol https --with-token
   gh auth setup-git
+  export GITHUB_TOKEN="$_gh_token"
+  unset _gh_token
+
+  if gh auth status --hostname github.com >/dev/null 2>&1; then
+    echo "  gh + git credential helper configured for github.com"
+  else
+    echo "  WARNING: gh auth status reports the token isn't valid. Push and PR creation will fail." >&2
+  fi
 else
   echo "WARNING: GITHUB_TOKEN is not set. The agent can still read the repo," \
        "but clone of private repos, push, and PR creation will fail." >&2
