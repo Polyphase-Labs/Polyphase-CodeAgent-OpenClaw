@@ -3,7 +3,7 @@ set -e
 
 bash "./build.sh"
 
-cd "$OCTAVE_DIR"
+cd "$POLYPHASE_DIR"
 
 # Ensure directories exist
 mkdir -p /data/openclaw/.openclaw/workspace/memory

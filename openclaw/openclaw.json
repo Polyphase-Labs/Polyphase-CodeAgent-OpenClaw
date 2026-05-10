@@ -24,7 +24,6 @@
         }
       },
 
-     
       "workspace": "/data/openclaw/.openclaw/workspace",
       "compaction": {
         "mode": "safeguard"
@@ -34,20 +33,23 @@
         "maxConcurrent": 8
       }
     },
-     "list": [
+    "list": [
       {
         "id": "main",
         "model": "openai/gpt-5.1-codex",
         "skills": [
-          "octave_dev"
+          "polyphase",
+          "polyphase-addon",
+          "polyphase-controller",
+          "polyphase-widget"
         ],
         "tools": {
           "deny": [
             "web_search"
           ]
         }
-        }
-      ]
+      }
+    ]
   },
   "messages": {
     "ackReactionScope": "group-mentions"
@@ -72,7 +74,7 @@
     },
     "auth": {
       "mode": "token",
-      "token": "6a69234afe99f00bdc219089f6be41eec9f7ae3d3fbe6904"
+      "token": "polyphase"
     },
     "tailscale": {
       "mode": "off",
@@ -97,7 +99,16 @@
       "watch": true
     },
     "entries": {
-      "octave_dev": {
+      "polyphase": {
+        "enabled": true
+      },
+      "polyphase-addon": {
+        "enabled": true
+      },
+      "polyphase-controller": {
+        "enabled": true
+      },
+      "polyphase-widget": {
         "enabled": true
       }
     }

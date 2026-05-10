@@ -1,8 +1,8 @@
 services:
-  octave_claw:
+  polyphase_claw:
     build: .
     environment:
-      OCTAVE_REPO: ${OCTAVE_REPO}
+      POLYPHASE_REPO: ${POLYPHASE_REPO:-https://github.com/Polyphase-Labs/Polyphase-Engine}
       OPENCLAW_HOME: /data/openclaw
       SYNC_MODE: "false"
       # ALLOWED_ORIGINS: "http://localhost:3348,https://myhost.example.com"
@@ -10,9 +10,9 @@ services:
     ports:
       - "3348:3000"
     volumes:
-      - openclaw_octave_state:/data/openclaw
+      - openclaw_polyphase_state:/data/openclaw
     tty: true
     stdin_open: true
 
 volumes:
-  openclaw_octave_state:
+  openclaw_polyphase_state:

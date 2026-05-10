@@ -3,7 +3,8 @@ FROM node:22-slim
 
 ENV OPENCLAW_HOME=/data/openclaw \
     WORKSPACE=/workspace \
-    OCTAVE_DIR=/data/openclaw/.openclaw/workspace/Octave
+    POLYPHASE_DIR=/data/openclaw/.openclaw/workspace/Polyphase \
+    POLYPHASE_PATH=/data/openclaw/.openclaw/workspace/Polyphase
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git \

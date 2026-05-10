@@ -1,36 +1,42 @@
-# Octave Game Engine Dev Agent - OpenClaw Docker Deployment
+# Polyphase Engine Dev Agent — OpenClaw Docker Deployment
 
-A self-contained Docker deployment of an [OpenClaw](https://docs.openclaw.ai) agent specialized for [Octave Engine](https://github.com/vltmedia/octave) development. On startup it clones the Octave repository, loads the `octave_dev` skill, and exposes the OpenClaw Gateway + Control UI over HTTP.
+A self-contained Docker deployment of an [OpenClaw](https://docs.openclaw.ai) agent specialised for [Polyphase Engine](https://github.com/Polyphase-Labs/Polyphase-Engine) development. On startup it clones the Polyphase Engine repository into the container workspace, loads the four `polyphase*` skills, and exposes the OpenClaw Gateway + Control UI over HTTP.
 
 ## What It Does
 
-The agent ships with the **octave_dev** skill, which gives it deep knowledge of the Octave Engine codebase — architecture, naming conventions, subsystems, and development patterns. It reads the `.llm/` documentation files and source code directly from the cloned repo inside the container.
+The agent ships with four skills covering the full surface of Polyphase Engine development:
+
+| Skill | Purpose |
+|-------|---------|
+| **polyphase** | Senior engine-developer skill — RTTI/factory patterns, serialization, naming conventions, every subsystem (rendering, scripting, node graphs, editor, asset pipeline, plugins). Reads `.llm/Spec.md` and subsystem docs as its map. |
+| **polyphase-addon** | Build and ship full-fledged native C++ addons under `<Project>/Packages/<reverse-dns-id>/` — hot-reloaded by the editor, statically linked into shipped builds. Covers `package.json`, lifecycle, editor-UI hooks, per-platform libraries. |
+| **polyphase-controller** | Drive the running editor over its REST controller server — create scenes, spawn nodes, set transforms and properties, attach Lua scripts, fill in script-exposed fields, start/stop play-in-editor. |
+| **polyphase-widget** | Generate new UI widgets following the established Widget + Lua-binding pattern. |
+
+The skills read the `.llm/` documentation files and source headers directly from the cloned repo inside the container, so answers are grounded in the actual codebase rather than guesses.
 
 ### Use Cases
 
-- **Code generation** — Ask it to scaffold new Node types, Asset types, Graph Nodes, Lua bindings, or Editor panels following Octave's exact conventions (RTTI macros, factory registration, serialization patterns).
+- **Code generation** — Scaffold new Node types, Asset types, GraphNodes, Lua bindings, native addons, editor panels, or widgets following Polyphase's exact conventions (RTTI macros, factory registration, serialization patterns).
+- **Scene authoring at runtime** — "Spawn a cube at origin, attach the player script, and start play-in-editor" — handled via the `polyphase-controller` skill talking to the editor's REST server.
 - **Architecture Q&A** — Query subsystem design, class hierarchies, or how specific engine features are implemented.
-- **Debugging assistance** — Describe a bug and it will trace call chains, read relevant source files, and suggest fixes.
+- **Debugging assistance** — Describe a bug; the agent will trace call chains, read relevant source files, and suggest fixes.
 - **Code review** — Paste code and it will check for missing `FORCE_LINK_CALL` registration, incorrect naming, missing `#if EDITOR` guards, asset version gating, and other common pitfalls.
 - **Onboarding** — New developers can ask the agent to explain any part of the engine, from the rendering pipeline to the plugin API.
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- An [OpenAI API key](https://platform.openai.com/api-keys) (the agent uses `gpt-5.1-codex` by default)
+- An [OpenAI API key](https://platform.openai.com/api-keys) (the agent uses `gpt-5.1-codex` by default; Anthropic also supported)
 
 ## Quick Start
 
-### 1. Create a `.env` file
+### 1. (Optional) Create a `.env` file
+
+The compose file defaults `POLYPHASE_REPO` to `https://github.com/Polyphase-Labs/Polyphase-Engine`, so you can skip this step unless you want to point at a fork or private mirror.
 
 ```bash
-cp .env.example .env
-```
-
-Edit `.env` and set:
-
-```
-OCTAVE_REPO=https://github.com/vltmedia/octave
+echo "POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine" > .env
 ```
 
 ### 2. Build and start the container
@@ -44,7 +50,7 @@ docker compose up --build -d
 The agent needs your OpenAI or Anthropic API key stored in its credential store. Shell into the running container and run the onboard wizard:
 
 ```bash
-docker compose exec octave_claw openclaw onboard
+docker compose exec polyphase_claw openclaw onboard
 ```
 
 This walks you through:
@@ -83,11 +89,11 @@ The default token is set in `openclaw/openclaw.json` under `gateway.auth.token`:
 ```json
 "auth": {
   "mode": "token",
-  "token": "lobstero"
+  "token": "polyphase"
 }
 ```
 
-Enter `lobstero` (or whatever you've changed it to) in the Control UI token prompt.
+Enter `polyphase` (or whatever you've changed it to) in the Control UI token prompt.
 
 ### Changing the token
 
@@ -104,8 +110,8 @@ Device pairing is **disabled** in this deployment (`dangerouslyDisableDeviceAuth
 If you want to re-enable pairing for tighter security, set `dangerouslyDisableDeviceAuth` to `false` in `openclaw/openclaw.json`. New browsers will then require approval:
 
 ```bash
-docker compose exec octave_claw openclaw devices list
-docker compose exec octave_claw openclaw devices approve <requestId>
+docker compose exec polyphase_claw openclaw devices list
+docker compose exec polyphase_claw openclaw devices approve <requestId>
 ```
 
 ### Allowed origins
@@ -159,77 +165,80 @@ If you prefer plain `docker` commands instead of Compose:
 ### 1. Build the image
 
 ```bash
-docker build -t octave-claw .
+docker build -t polyphase-claw .
 ```
 
 ### 2. Create a volume for persistent data
 
 ```bash
-docker volume create openclaw_octave_state
+docker volume create openclaw_polyphase_state
 ```
 
 ### 3. Run the container
 
 ```bash
 docker run -d \
-  --name octave_claw \
-  -e OCTAVE_REPO=https://github.com/vltmedia/octave \
+  --name polyphase_claw \
+  -e POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine \
   -e OPENCLAW_HOME=/data/openclaw \
   -p 3348:3000 \
-  -v openclaw_octave_state:/data/openclaw \
+  -v openclaw_polyphase_state:/data/openclaw \
   --tty --interactive \
-  octave-claw
+  polyphase-claw
 ```
 
 ### 4. Run onboarding (first time only)
 
 ```bash
-docker exec -it octave_claw openclaw onboard
+docker exec -it polyphase_claw openclaw onboard
 ```
 
 Then restart the container:
 
 ```bash
-docker restart octave_claw
+docker restart polyphase_claw
 ```
 
 ### 5. Open the Control UI
 
-Navigate to `http://localhost:3348` and enter the auth token (default: `lobstero`).
+Navigate to `http://localhost:3348` and enter the auth token (default: `polyphase`).
 
 ### Useful commands
 
 ```bash
 # View logs
-docker logs -f octave_claw
+docker logs -f polyphase_claw
 
 # Shell into the container
-docker exec -it octave_claw bash
+docker exec -it polyphase_claw bash
 
 # List skills
-docker exec octave_claw openclaw skills list
+docker exec polyphase_claw openclaw skills list
 
 # Stop and remove
-docker stop octave_claw && docker rm octave_claw
+docker stop polyphase_claw && docker rm polyphase_claw
 
 # Fully reset (remove persistent data)
-docker volume rm openclaw_octave_state
+docker volume rm openclaw_polyphase_state
 ```
 
 ## Project Structure
 
 ```
 .
-├── Dockerfile              # Node 22 base, installs OpenClaw via npm
-├── docker-compose.yml      # Service definition, port mapping, volume
-├── entrypoint.sh           # Clones Octave repo, copies config, starts gateway
-├── .env                    # Environment variables (OCTAVE_REPO)
+├── Dockerfile                  # Node 22 base, installs OpenClaw via npm
+├── docker-compose.yml          # Service definition, port mapping, volume
+├── entrypoint.sh               # Clones Polyphase repo, copies config, starts gateway
+├── build.sh                    # Clone/pull helper invoked by entrypoint
 ├── openclaw/
-│   ├── openclaw.json       # OpenClaw gateway + agent configuration
-│   ├── skills/
-│   │   └── octave_dev/
-│   │       └── SKILL.md    # The Octave Engine developer skill
-│   └── memory/             # Agent memory files (persisted into workspace)
+│   ├── openclaw.json           # OpenClaw gateway + agent configuration
+│   └── workspace/
+│       ├── skills/
+│       │   ├── polyphase/             # General engine-dev skill
+│       │   ├── polyphase-addon/       # Native C++ addon authoring
+│       │   ├── polyphase-controller/  # Editor REST controller scripting
+│       │   └── polyphase-widget/      # UI widget generation
+│       └── memory/             # Agent identity + seeded memory files
 └── README.md
 ```
 
@@ -280,8 +289,8 @@ This is useful during development when you're iterating on `openclaw.json`, skil
 
 ### Persistent data
 
-The Docker volume `openclaw_octave_state` persists:
-- The cloned Octave repository
+The Docker volume `openclaw_polyphase_state` persists:
+- The cloned Polyphase Engine repository
 - OpenClaw credentials (from onboarding)
 - Session history and memory
 - Config and skills (after first boot, unless `SYNC_MODE=true`)
@@ -295,28 +304,39 @@ docker compose down -v
 ## Troubleshooting
 
 ### "Gateway token missing"
-Enter the auth token in the Control UI prompt. Default: `lobstero`.
+Enter the auth token in the Control UI prompt. Default: `polyphase`.
 
 ### "Pairing required"
 If you re-enabled device auth, approve the device from inside the container (see [Device pairing](#device-pairing)).
 
 ### Skill not showing up
-The `octave_dev` skill should appear in the agent's skill list. Verify with:
+All four `polyphase*` skills should appear in the agent's skill list. Verify with:
 
 ```bash
-docker compose exec octave_claw openclaw skills list
+docker compose exec polyphase_claw openclaw skills list
 ```
 
-If it shows as missing, check that the SKILL.md was copied correctly:
+If anything is missing, check that the SKILL.md files were copied correctly:
 
 ```bash
-docker compose exec octave_claw cat /data/openclaw/.openclaw/workspace/skills/octave_dev/SKILL.md
+docker compose exec polyphase_claw ls /data/openclaw/.openclaw/workspace/skills/
 ```
+
+You should see `polyphase/`, `polyphase-addon/`, `polyphase-controller/`, and `polyphase-widget/` — each containing a `SKILL.md`.
+
+### Skills out of date after a Polyphase Engine update
+The skills are baked into the Docker image from the engine repo's `.claude/skills/` at build time. To refresh them, copy the latest skill folders into `openclaw/workspace/skills/` and rebuild:
+
+```bash
+docker compose up --build -d
+```
+
+If you want the rebuild to also push the updated skills into the live volume, set `SYNC_MODE=true` for the next boot.
 
 ### Onboarding credentials lost
 If you removed the Docker volume, re-run onboarding:
 
 ```bash
-docker compose exec octave_claw openclaw onboard
+docker compose exec polyphase_claw openclaw onboard
 docker compose restart
 ```

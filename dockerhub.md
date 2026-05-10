@@ -1,35 +1,39 @@
-# Octave Dev Claw
+# Polyphase Dev Claw
 
-An AI-powered development agent for the [Octave Game Engine](https://github.com/vltmedia/octave), built on [OpenClaw](https://docs.openclaw.ai). Ships with the `octave_dev` skill — deep knowledge of every Octave subsystem, naming convention, and development pattern — ready to assist with code generation, architecture questions, debugging, and code review.
+An AI-powered development agent for the [Polyphase Engine](https://github.com/Polyphase-Labs/Polyphase-Engine), built on [OpenClaw](https://docs.openclaw.ai). Ships with four `polyphase*` skills — deep knowledge of every Polyphase subsystem, naming convention, and development pattern — ready to assist with code generation, native addon authoring, runtime scene control, widget creation, architecture questions, debugging, and code review.
 
 ## Quick Start
 
 ```bash
 docker run -d \
-  --name octave_claw \
-  -e OCTAVE_REPO=https://github.com/vltmedia/octave \
+  --name polyphase_claw \
+  -e POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine \
   -e OPENCLAW_HOME=/data/openclaw \
   -p 3348:3000 \
-  -v openclaw_octave_state:/data/openclaw \
+  -v openclaw_polyphase_state:/data/openclaw \
   --tty --interactive \
-  vltmedia/octave-dev-claw:latest
+  polyphaselabs/polyphase-dev-claw:latest
 ```
 
 Then run onboarding to set up your API key (first time only):
 
 ```bash
-docker exec -it octave_claw openclaw onboard
-docker restart octave_claw
+docker exec -it polyphase_claw openclaw onboard
+docker restart polyphase_claw
 ```
 
-Open the Control UI at **http://localhost:3348** and enter the auth token (default: `lobstero`).
+Open the Control UI at **http://localhost:3348** and enter the auth token (default: `polyphase`).
 
 ## What's Inside
 
 - **Node 22** runtime with OpenClaw installed via npm
-- **octave_dev skill** — a comprehensive Octave Engine development prompt covering RTTI/factory patterns, serialization, node/asset/graph node creation, Lua bindings, editor panels, and platform-specific code
-- On first boot, automatically clones the Octave repository into the container workspace
-- **Agent memory** files baked into the image for pre-seeded context
+- Four bundled skills:
+  - **polyphase** — Engine developer playbook (RTTI, factories, serialization, every subsystem).
+  - **polyphase-addon** — Native C++ addon authoring (manifests, lifecycle, editor UI hooks, hot-reload).
+  - **polyphase-controller** — Drive the running editor over its REST controller server.
+  - **polyphase-widget** — Generate new UI widgets following the established pattern.
+- On first boot, automatically clones the Polyphase Engine repository into the container workspace
+- **Agent memory** files baked into the image for pre-seeded identity / context
 - Persistent volume keeps credentials, session history, and the cloned repo across restarts
 - **Sync mode** (`SYNC_MODE=true`) to force-refresh config, skills, and memory from the image on every boot
 
@@ -37,7 +41,7 @@ Open the Control UI at **http://localhost:3348** and enter the auth token (defau
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OCTAVE_REPO` | Yes | Git URL for the Octave repository |
+| `POLYPHASE_REPO` | No | Git URL for the Polyphase Engine repository. Defaults to `https://github.com/Polyphase-Labs/Polyphase-Engine` if unset. |
 | `OPENCLAW_HOME` | No | OpenClaw data directory (default: `/data/openclaw`) |
 | `SYNC_MODE` | No | Set to `true` to overwrite config/skills/memory from the image on every boot. Default: only copies on first run. |
 | `ALLOWED_ORIGINS` | No | Comma-separated list of allowed origins for the Control UI (e.g., `http://localhost:3348,https://myhost.example.com`). Patches the config at runtime. |
@@ -59,21 +63,21 @@ Map it to any host port you like (e.g., `-p 3348:3000`).
 
 ## Authentication
 
-The gateway requires a token to connect. Default token: `lobstero`.
+The gateway requires a token to connect. Default token: `polyphase`.
 
 You can override the token and allowed origins via environment variables — no rebuild needed:
 
 ```bash
 docker run -d \
-  --name octave_claw \
-  -e OCTAVE_REPO=https://github.com/vltmedia/octave \
+  --name polyphase_claw \
+  -e POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine \
   -e OPENCLAW_HOME=/data/openclaw \
   -e GATEWAY_TOKEN=my-secret-token \
   -e ALLOWED_ORIGINS="http://localhost:3348,https://myhost.example.com" \
   -p 3348:3000 \
-  -v openclaw_octave_state:/data/openclaw \
+  -v openclaw_polyphase_state:/data/openclaw \
   --tty --interactive \
-  vltmedia/octave-dev-claw:latest
+  polyphaselabs/polyphase-dev-claw:latest
 ```
 
 The entrypoint patches the config JSON at runtime with the values from `GATEWAY_TOKEN` and `ALLOWED_ORIGINS`.
@@ -83,7 +87,7 @@ The entrypoint patches the config JSON at runtime with the values from `GATEWAY_
 The first time you run the container, you need to register your LLM provider credentials:
 
 ```bash
-docker exec -it octave_claw openclaw onboard
+docker exec -it polyphase_claw openclaw onboard
 ```
 
 The wizard will ask you to:
@@ -95,11 +99,14 @@ Credentials are stored in the persistent volume — you only need to do this onc
 
 ## Use Cases
 
-- **Scaffold engine types** — "Create a new ParticleEmitter3D node with velocity, lifetime, and emission rate properties"
-- **Architecture deep-dives** — "Explain how the NodeGraph processor evaluates pins and links"
+- **Scaffold engine types** — "Create a new ParticleEmitter3D node with velocity, lifetime, and emission rate properties."
+- **Author a native addon** — "Create an addon called 'com.acme.video' that registers a VideoPlayer3D node and an editor menu under Tools > Video."
+- **Drive the running editor** — "Spawn a directional light, three Box3D nodes in a triangle around origin, attach the player script to the first one, then play the scene."
+- **Generate a widget** — "Make a Slider widget that drives a float value and emits an OnValueChanged signal."
+- **Architecture deep-dives** — "Explain how the NodeGraph processor evaluates pins and links."
 - **Debug assistance** — "My custom asset isn't appearing at runtime, what could be wrong?"
-- **Code review** — "Check this Node implementation for missing registration, guards, or serialization version gating"
-- **Onboard new developers** — "Walk me through the rendering pipeline from Vulkan init to frame submission"
+- **Code review** — "Check this Node implementation for missing registration, guards, or serialization version gating."
+- **Onboard new developers** — "Walk me through the rendering pipeline from Vulkan init to frame submission."
 
 ## Sync Mode
 
@@ -108,22 +115,22 @@ By default, config, skills, and memory are only copied into the volume on first 
 ```bash
 docker run -d \
   -e SYNC_MODE=true \
-  -e OCTAVE_REPO=https://github.com/vltmedia/octave \
+  -e POLYPHASE_REPO=https://github.com/Polyphase-Labs/Polyphase-Engine \
   -e OPENCLAW_HOME=/data/openclaw \
   -p 3348:3000 \
-  -v openclaw_octave_state:/data/openclaw \
+  -v openclaw_polyphase_state:/data/openclaw \
   --tty --interactive \
-  vltmedia/octave-dev-claw:latest
+  polyphaselabs/polyphase-dev-claw:latest
 ```
 
 ## Docker Compose
 
 ```yaml
 services:
-  octave_claw:
-    image: vltmedia/octave-dev-claw:latest
+  polyphase_claw:
+    image: polyphaselabs/polyphase-dev-claw:latest
     environment:
-      OCTAVE_REPO: https://github.com/vltmedia/octave
+      POLYPHASE_REPO: https://github.com/Polyphase-Labs/Polyphase-Engine
       OPENCLAW_HOME: /data/openclaw
       # SYNC_MODE: "true"       # Uncomment to overwrite config/skills/memory on every boot
       # ALLOWED_ORIGINS: "http://localhost:3348,https://myhost.example.com"
@@ -131,15 +138,15 @@ services:
     ports:
       - "3348:3000"
     volumes:
-      - openclaw_octave_state:/data/openclaw
+      - openclaw_polyphase_state:/data/openclaw
     tty: true
     stdin_open: true
 
 volumes:
-  openclaw_octave_state:
+  openclaw_polyphase_state:
 ```
 
 ## Links
 
-- [Octave Engine](https://github.com/vltmedia/octave)
-- [Source & Dockerfile](https://github.com/vltmedia/Octave-Game-Engine-Agent-Claw/blob/main/Dockerfile)
+- [Polyphase Engine](https://github.com/Polyphase-Labs/Polyphase-Engine)
+- [Source & Dockerfile](https://github.com/Polyphase-Labs/Polyphase-Dev-Claw)
